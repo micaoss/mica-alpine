@@ -32,3 +32,5 @@ Each task is a single line linking to its detail file. All detailed information 
 ---
 
 ## Tasks
+
+- [x] [**20261016-0508-dhcp-all-ethernet DHCP on every eth* interface**](20261016-0508-dhcp-all-ethernet.md) `P1`

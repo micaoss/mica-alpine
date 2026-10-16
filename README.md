@@ -87,14 +87,11 @@ initramfs and cannot be passed directly to the kernel as an initrd.
   adapting the image for a non-lab environment.
 - OpenRC starts device management, logs, networking, Dropbear SSH, cron, and
   BusyBox `ntpd`.
-- `/etc/network/interfaces` controls Ethernet and Wi-Fi addressing and startup.
-  `lo` and `eth0` start automatically; `eth0` uses DHCP. `eth1` and `wlan0` have
-  optional DHCP stanzas. Enable their `auto` lines or run `ifup` when needed.
-  Rename the stanzas for platforms with different device names. Interfaces not
-  enabled in this configuration do not automatically acquire addresses.
-- ifupdown invokes the `dhcpcd` client for each DHCP interface and stops it with
-  `ifdown`. There is no separate global DHCP client service. DHCP runs in the
-  background, so login does not require a cable or a lease.
+- The `dhcpcd` service obtains addresses by DHCP on every Ethernet (`eth*`,
+  `en*`) and Wi-Fi (`wlan*`) interface, including interfaces and links that
+  appear after boot. A missing cable or lease does not block login or SSH.
+- `/etc/network/interfaces` (ifupdown-ng) brings up `lo` and authenticates
+  Wi-Fi; it does not assign Ethernet addresses.
 - Dropbear host keys and machine ID are created on first boot and persist on the
   writable root. Dropbear has no SFTP server; OpenSSH clients use `scp -O`. No private host keys or machine ID are shared in the archive.
 - Wi-Fi (`wpa_supplicant`, `iw`), `ethtool`, CAN, I2C, PCI, USB, and DRM
@@ -106,10 +103,21 @@ initramfs and cannot be passed directly to the kernel as an initrd.
 - No service rewrites partition tables, resizes storage, assigns board-specific
   MAC addresses, configures CAN bitrates, or changes USB gadget/LED state.
 
-For a static address, replace that interface's `inet dhcp` stanza with an
-`inet static` stanza and set `address` and `gateway`, as shown in the comments
-in `interfaces`. Apply the change with `ifdown eth0; ifup eth0` from the console.
-When using only static interfaces, set DNS servers in `/etc/resolv.conf` as well.
+To give one interface a static address instead of DHCP, add to
+`/etc/dhcpcd.conf`:
+
+```text
+interface eth1
+static ip_address=192.168.1.100/24
+static routers=192.168.1.1
+static domain_name_servers=192.168.1.1
+```
+
+To take an interface away from dhcpcd entirely, add `denyinterfaces eth1`
+(it overrides `allowinterfaces`) and configure it in `/etc/network/interfaces`
+or by hand. Apply `dhcpcd.conf` edits with `rc-service dhcpcd restart` from the
+console; this also restarts dropbear. For a one-off change until reboot, run
+`dhcpcd -k eth1` and configure the interface with `ip`.
 
 For Wi-Fi, add a `network={...}` block containing the SSID and credentials to
 `/etc/wpa_supplicant/wpa_supplicant.conf`, then run `ifup wlan0`. The existing
@@ -118,16 +126,14 @@ For Wi-Fi, add a `network={...}` block containing the SSID and credentials to
 ```text
 # Uncomment to start this interface at boot:
 # auto wlan0
-iface wlan0 inet dhcp
+iface wlan0 inet manual
     use wifi
     wifi-config-path /etc/wpa_supplicant/wpa_supplicant.conf
 ```
 
-`ifdown wlan0` stops both its DHCP client and its supplicant. Wi-Fi static
-addressing uses `inet static` plus `address`/`gateway` in the same stanza,
-retaining the two Wi-Fi options. Do not start a second global wpa_supplicant
-service for an interface managed by ifupdown. Wireless drivers and firmware
-must come from the consuming kernel project.
+dhcpcd obtains the address once the link is associated; `ifdown wlan0` stops
+the supplicant. Do not start a second global wpa_supplicant service. Wireless
+drivers and firmware must come from the consuming kernel project.
 
 ## Verify
 
@@ -149,8 +155,8 @@ Current delivery verification:
 `make check` uses the host's Python 3 for syntax checks. Build and archive
 verification run inside Docker. The build itself verifies archive layout,
 checksum, ELF/APK architecture, permissions, startup services, and clean
-machine identity. The build also checks the installed ifupdown parser, per-interface
-DHCP start/stop commands, and Wi-Fi executor wiring. `make verify` repeats the
+machine identity. The build also checks the installed ifupdown parser, the dhcpcd
+service and interface policy, and Wi-Fi executor wiring. `make verify` repeats the
 archive checks on an existing artifact. Wi-Fi association has not been tested
 on physical wireless hardware.
 
@@ -161,8 +167,8 @@ The supplied modules model a consuming kernel project's driver payload; the
 delivered archive is not changed. Checks cover OpenRC startup, authenticated
 console login and job control, DHCP/DNS, SSH for both accounts, persistent
 identity across reboot, offline boot, and orderly shutdown.
-The second Ethernet interface stays unconfigured until explicitly enabled;
-tests exercise its DHCP start/stop and static addressing through ifupdown.
+Both Ethernet interfaces must obtain DHCP leases without configuration; tests
+also apply a dhcpcd static address and `denyinterfaces` exclusion to the second.
 The offline case boots a separate, unchanged extraction without any modules
 added to the rootfs; the test initramfs supplies the root storage drivers.
 

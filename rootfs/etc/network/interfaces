@@ -1,36 +1,16 @@
-# Network configuration managed by ifupdown-ng.
-# Find device names with: ip link
-# Replace eth0, eth1, or wlan0 below with the names reported by your kernel.
+# ifupdown-ng configuration. Ethernet (eth*, en*) and Wi-Fi (wlan*) addresses
+# are managed by the dhcpcd service; see /etc/dhcpcd.conf for static addresses
+# and for excluding an interface from DHCP.
 #
-# auto NAME: bring the interface up when the networking service starts.
-# iface NAME inet dhcp: obtain an IPv4 address, routes, and DNS using DHCP.
-# iface NAME inet static: use the address and gateway configured in the stanza.
-# Without auto, a stanza is available for manual activation only.
-#
-# Inspect the resolved configuration: ifquery eth0
-# Start / stop an interface: ifup eth0 / ifdown eth0
-# After editing, apply from a local console: ifdown eth0 && ifup eth0
-#
-# DHCP is started and stopped per interface using dhcpcd. Shared client settings
-# are in /etc/dhcpcd.conf; do not enable a separate dhcpcd service.
-# Optional client config override inside a DHCP stanza (indent as shown):
-#     dhcp-config /etc/dhcpcd.conf
+# Inspect the resolved configuration: ifquery wlan0
+# Start / stop an interface: ifup wlan0 / ifdown wlan0
 
 auto lo
 iface lo inet loopback
 
-# Enable DHCP on the primary Ethernet interface.
-auto eth0
-iface eth0 inet dhcp
-
-# Optional second Ethernet port: uncomment auto or run ifup eth1.
-# auto eth1
-iface eth1 inet dhcp
-
 # Wi-Fi: add credentials to the referenced file, then uncomment auto below
-# or run ifup wlan0. ifdown wlan0 stops both DHCP and wpa_supplicant.
-# use wifi: enable the executor that starts wpa_supplicant before DHCP.
-# wifi-config-path: reference an existing wpa_supplicant configuration file.
+# or run ifup wlan0. ifupdown starts wpa_supplicant; dhcpcd obtains the
+# address once the link is associated. ifdown wlan0 stops wpa_supplicant.
 # The installed executor does not support the wpa-conf option.
 # Do not enable a separate wpa_supplicant service for this interface.
 #
@@ -42,29 +22,16 @@ iface eth1 inet dhcp
 # }
 # Keep that file private: chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf
 # auto wlan0
-iface wlan0 inet dhcp
+iface wlan0 inet manual
     use wifi
     wifi-config-path /etc/wpa_supplicant/wpa_supplicant.conf
 
-# Static Ethernet: replace the existing eth0 DHCP stanza; keep auto eth0
-# if it should start at boot. address uses CIDR notation; gateway is optional
-# when only a directly connected network is needed.
-# iface eth0 inet static
+# Interface excluded from dhcpcd (denyinterfaces in /etc/dhcpcd.conf) with a
+# static address managed here; apply with: rc-service dhcpcd restart; ifup eth1
+# auto eth1
+# iface eth1 inet static
 #     address 192.168.1.100/24
 #     gateway 192.168.1.1
-#
-# Static Wi-Fi: replace the existing wlan0 DHCP stanza, keeping its Wi-Fi
-# executor and configuration reference. Enable auto wlan0 separately if needed.
-# iface wlan0 inet static
-#     address 192.168.1.101/24
-#     gateway 192.168.1.1
-#     use wifi
-#     wifi-config-path /etc/wpa_supplicant/wpa_supplicant.conf
-#
-# For a static-only system, configure DNS in /etc/resolv.conf, for example:
-# nameserver 192.168.1.1
-# A DHCP-enabled interface can update /etc/resolv.conf with its leased DNS.
 
 # Additional files use the same syntax, for example interfaces.d/usb0.
-# Define each interface in one place; move its stanza instead of duplicating it.
 source /etc/network/interfaces.d/*

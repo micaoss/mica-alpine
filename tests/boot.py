@@ -138,25 +138,23 @@ def main(platform):
         guest.command(f"test \"$(tty)\" = /dev/{guest.console} && test -r /dev/tty && "
                       "set -o | grep -E '^monitor[[:space:]]+on$'")
         guest.command("sleep 30 & job=$!; jobs; kill \"$job\"; wait \"$job\"; test $? -gt 128")
-        guest.command("rc-service dropbear status && rc-service networking status && "
+        guest.command("rc-service dropbear status && rc-service networking status && rc-service dhcpcd status && "
                       "rc-service syslog status && rc-service klogd status")
         wait_ssh()
-        guest.command("ifquery --running | grep -qx eth0; test $? -eq 0 && "
-                      "! ifquery --running | grep -qx eth1 && "
+        lease = ("for attempt in $(seq 1 30); do ip -4 addr show dev {0} | grep -q 'inet {1}' && break; "
+                 "sleep 1; done; ip -4 addr show dev {0} | grep -q 'inet {1}'")
+        guest.command(lease.format("eth0", "10.0.2.") + " && " + lease.format("eth1", "10.0.3."))
+        guest.command("cp /etc/dhcpcd.conf /tmp/dhcpcd.conf && "
+                      "printf 'interface eth1\\nstatic ip_address=192.0.2.10/24\\n' >> /etc/dhcpcd.conf && "
+                      "rc-service dhcpcd restart && " + lease.format("eth1", "192.0.2.10/24") + " && "
+                      "! ip -4 addr show dev eth1 | grep -q 'inet 10.0.3.'")
+        guest.command("cp /tmp/dhcpcd.conf /etc/dhcpcd.conf && echo 'denyinterfaces eth1' >> /etc/dhcpcd.conf && "
+                      "rc-service dhcpcd restart && " + lease.format("eth0", "10.0.2.") + " && sleep 5 && "
                       "! ip -4 addr show dev eth1 | grep -q 'inet '")
-        guest.command("ifup eth1 && "
-                      "for attempt in $(seq 1 20); do "
-                      "ip -4 addr show dev eth1 | grep -q 'inet 10.0.3.' && break; sleep 1; done; "
-                      "ip -4 addr show dev eth1 | grep -q 'inet 10.0.3.'")
-        guest.command("ifdown eth1 && "
-                      "! ip -4 addr show dev eth1 | grep -q 'inet ' && "
-                      "! ifquery --running | grep -qx eth1")
-        guest.command("printf 'iface eth1 inet static\\n    address 192.0.2.10/24\\n' > /tmp/static-interfaces; "
-                      "ifup -i /tmp/static-interfaces eth1 && "
-                      "ip -4 addr show dev eth1 | grep -q 'inet 192.0.2.10/24' && "
-                      "ifdown -i /tmp/static-interfaces eth1 && "
-                      "! ip -4 addr show dev eth1 | grep -q 'inet '")
-        print(f"PASS: {platform} opt-in Ethernet, interfaces-managed DHCP start/stop, and static addressing", flush=True)
+        guest.command("cp /tmp/dhcpcd.conf /etc/dhcpcd.conf && rc-service dhcpcd restart && "
+                      + lease.format("eth0", "10.0.2.") + " && " + lease.format("eth1", "10.0.3."))
+        wait_ssh()
+        print(f"PASS: {platform} automatic DHCP on every Ethernet port, static address, and exclusion", flush=True)
         print(ssh("set -e; test \"$(hostname)\" = mica-alpine; "
                   "ip -4 route show default | grep default; grep '^nameserver ' /etc/resolv.conf; "
                   "nslookup alpinelinux.org; rc-status default; "

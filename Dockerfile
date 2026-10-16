@@ -14,7 +14,7 @@ RUN echo 'root:root' | chpasswd && \
     chmod 0755 /usr/local/sbin/console-getty && \
     for service in devfs dmesg mdev hwdrivers; do rc-update add "$service" sysinit; done && \
     for service in modules sysctl hostname bootmisc swclock syslog klogd \
-                   networking machine-id seedrng; do rc-update add "$service" boot; done && \
+                   networking dhcpcd machine-id seedrng; do rc-update add "$service" boot; done && \
     for service in ntpd crond dropbear local; do rc-update add "$service" default; done && \
     for service in killprocs mount-ro savecache; do rc-update add "$service" shutdown; done && \
     mkdir -p /etc/network/interfaces.d /usr/share/mica-alpine /lib/modules /lib/firmware && \

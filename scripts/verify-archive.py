@@ -62,17 +62,17 @@ def verify(path, platform):
             assert package not in installed, f"excluded package installed: {package}"
         assert not read("etc/resolv.conf").startswith(b"nameserver"), "build host DNS leaked"
         interfaces = read("etc/network/interfaces").decode().splitlines()
-        for iface in ("eth0", "eth1", "wlan0"):
-            assert f"iface {iface} inet dhcp" in interfaces, f"missing interfaces-managed DHCP: {iface}"
-        assert "auto eth0" in interfaces, "default Ethernet startup missing"
-        assert "auto eth1" not in interfaces and "auto wlan0" not in interfaces, "optional hardware must be opt-in"
+        assert [line for line in interfaces if line.startswith("auto ")] == ["auto lo"], "only lo is managed by ifupdown at boot"
+        assert not any(line.startswith("iface eth") for line in interfaces), "Ethernet must be managed by dhcpcd"
+        assert "iface wlan0 inet manual" in interfaces, "Wi-Fi stanza must only authenticate"
         assert b"wifi-config-path /etc/wpa_supplicant/wpa_supplicant.conf" in read("etc/network/interfaces"), "missing interfaces-managed Wi-Fi authentication"
         assert members["etc/wpa_supplicant/wpa_supplicant.conf"].mode == 0o600, "Wi-Fi credentials must be root-only"
-        assert b"background\n" in read("etc/dhcpcd.conf"), "per-interface DHCP must not block boot"
-        assert b"denyinterfaces" not in read("etc/dhcpcd.conf"), "global DHCP interface policy overrides interfaces"
+        dhcpcd = read("etc/dhcpcd.conf").decode().splitlines()
+        assert "allowinterfaces eth* en* wlan*" in dhcpcd, "dhcpcd must manage every Ethernet and Wi-Fi interface"
+        assert "background" not in dhcpcd, "the dhcpcd service must not fork early"
         for level, services in {
             "sysinit": ("devfs", "mdev", "hwdrivers"),
-            "boot": ("hostname", "networking", "machine-id", "seedrng"),
+            "boot": ("hostname", "networking", "dhcpcd", "machine-id", "seedrng"),
             "default": ("dropbear", "ntpd", "crond"),
             "shutdown": ("killprocs", "mount-ro"),
         }.items():
@@ -84,7 +84,7 @@ def verify(path, platform):
             assert not name.startswith(("etc/dropbear/dropbear_", "lib/modules/", "lib/firmware/")), f"non-generic payload: {name}"
             assert not name.startswith(("proc/", "sys/", "dev/")), f"build device state leaked: {name}"
             assert name not in ("etc/machine-id", "var/lib/dbus/machine-id", "var/lib/misc/random-seed", "var/lib/seedrng/seed"), f"shared machine identity: {name}"
-        for service in ("dhcpcd", "wpa_supplicant"):
+        for service in ("wpa_supplicant",):
             assert not any(f"etc/runlevels/{level}/{service}" in members for level in ("sysinit", "boot", "default")), f"unexpected automatic service: {service}"
     print(f"PASS: {platform} archive, SHA-256, ELF, permissions, startup, and clean identity", flush=True)
 

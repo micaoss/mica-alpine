@@ -2,6 +2,16 @@
 
 ## 2026-10-16 05:30 [progress]
 
+Completed `20261016-0508-dhcp-all-ethernet`. The dhcpcd service (boot runlevel)
+now obtains DHCP leases on every `eth*`, `en*`, and `wlan*` interface, including
+hotplugged ones. ifupdown-ng brings up `lo` and only authenticates Wi-Fi
+(`wlan0` is `inet manual` with the Wi-Fi executor). Static addresses and
+exclusions are configured in `/etc/dhcpcd.conf`. amd64 archive verification and
+QEMU smoke pass: both NICs lease without configuration, static and
+`denyinterfaces` overrides apply, and offline boot starts dropbear cleanly.
+
+## 2026-10-16 05:30 [progress]
+
 Added the manual `release` workflow: a published `YYYYMMDD-HHMM` release or a
 workflow_dispatch run builds amd64/arm64 natively and ARMv7 with QEMU, then
 attaches `mica-alpine-<platform>.tar.gz` and `SHA256SUMS`. Removed `docs/plan/`.
