@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+# The final active console receives /dev/console output. tty0 denotes a VT.
+console=console
+if [ -r /sys/class/tty/console/active ]; then
+    for device in $(cat /sys/class/tty/console/active); do
+        console=$device
+    done
+fi
+case "$console" in
+    tty0) console=tty1 ;;
+    *[!a-zA-Z0-9_-]*) echo 'Invalid kernel console name' >&2; exit 1 ;;
+esac
+# Zero preserves the baud rate established by the kernel's console= argument.
+exec /sbin/getty -L 0 "$console" vt100

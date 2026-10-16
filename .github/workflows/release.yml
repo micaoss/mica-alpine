@@ -1,0 +1,86 @@
+name: release
+# Publishing a GitHub release YYYYMMDD-HHMM (`gh release create <YYYYMMDD-HHMM>
+# --target <commit>`) builds every platform from its tag and attaches the
+# archives and SHA256SUMS. workflow_dispatch builds the selected commit and
+# creates the release when it does not exist yet; rerunning replaces the assets.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: the release tag, YYYYMMDD-HHMM
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+env:
+  TAG: ${{ inputs.tag || github.event.release.tag_name }}
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-26.04
+          - platform: linux/arm64
+            runner: ubuntu-26.04-arm
+          - platform: linux/arm/v7
+            runner: ubuntu-26.04
+            qemu: arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - name: The tag is a time YYYYMMDD-HHMM
+        run: '[[ "${TAG}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: the tag ${TAG} is not YYYYMMDD-HHMM" >&2; exit 1; }'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || github.sha }}
+      - if: matrix.qemu
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: ${{ matrix.qemu }}
+      - name: Build ${{ matrix.platform }}
+        run: make build PLATFORM=${{ matrix.platform }}
+      - name: Name the archive
+        id: name
+        run: |
+          set -euo pipefail
+          dir=${PLATFORM//\//-}
+          mkdir -p out
+          cp "dist/$dir/rootfs.tar.gz" "out/mica-alpine-$dir.tar.gz"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rootfs-${{ steps.name.outputs.dir }}
+          path: out/
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: rootfs-*
+          path: out
+          merge-multiple: true
+      - name: Attach the archives and SHA256SUMS to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd out
+          sha256sum mica-alpine-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --notes ""
+          fi
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber mica-alpine-*.tar.gz SHA256SUMS

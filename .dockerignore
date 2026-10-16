@@ -1,0 +1,10 @@
+*
+!Dockerfile
+!images.env
+!packages.txt
+!rootfs/
+!rootfs/**
+!scripts/
+!scripts/**
+!tests/
+!tests/**

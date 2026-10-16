@@ -1,0 +1,15 @@
+# Changelog
+
+## 2026-10-16 05:30 [progress]
+
+Added the manual `release` workflow: a published `YYYYMMDD-HHMM` release or a
+workflow_dispatch run builds amd64/arm64 natively and ARMv7 with QEMU, then
+attaches `mica-alpine-<platform>.tar.gz` and `SHA256SUMS`. Removed `docs/plan/`.
+
+## 2026-10-16 05:10 [progress]
+
+Initial project state: a minimal Alpine/OpenRC debug rootfs built per platform
+with Docker. 18 packages; Dropbear SSH, doas, BusyBox ntpd/ip/wget,
+ifupdown-ng with dhcpcd, Wi-Fi, and CAN/I2C/PCI/USB/DRM diagnostics. The amd64
+archive is about 9 MiB and passes archive verification and QEMU smoke. arm64
+and ARMv7 have not been built: no available builder executes arm binaries.

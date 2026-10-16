@@ -1,0 +1,9 @@
+::sysinit:/sbin/openrc sysinit
+::sysinit:/sbin/openrc boot
+::wait:/sbin/openrc default
+
+# Resolve the real terminal behind the kernel console for job control.
+::respawn:/usr/local/sbin/console-getty
+
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown

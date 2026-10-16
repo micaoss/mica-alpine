@@ -1,0 +1,2 @@
+# The consumer kernel or initramfs mounts the actual root device.
+/dev/root / auto defaults 0 0
